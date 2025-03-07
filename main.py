@@ -1,10 +1,11 @@
 import logging
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import asyncio
 from contextlib import asynccontextmanager
 
-from api.router import auth_router
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from api.middleware.password_check import PasswordChangeMiddleware
+from api.router import auth_router, user_router
 from core.config import settings
 from core.database import get_connection_pool
 
@@ -45,8 +46,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 비밀번호 변경 체크 미들웨어 추가
+app.add_middleware(PasswordChangeMiddleware)
+
 # 라우터 등록
 app.include_router(auth_router.router, prefix="/api", tags=["auth"])
+app.include_router(user_router.router, prefix="/api", tags=["users"])
 
 if __name__ == "__main__":
     import uvicorn

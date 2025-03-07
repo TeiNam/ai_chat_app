@@ -32,6 +32,17 @@ class Settings(BaseSettings):
     # 쿠키 설정
     COOKIE_SECURE: bool = False  # 개발 환경에서는 False, 프로덕션에서는 True로 변경
 
+    # 이메일 설정
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = "your-email@gmail.com"
+    SMTP_PASSWORD: str = "your-app-password"
+    SMTP_FROM_EMAIL: str = "your-email@gmail.com"
+    SMTP_USE_TLS: bool = True
+
+    # 프론트엔드 URL (이메일 인증 링크 등에 사용)
+    FRONTEND_URL: str = "http://localhost:3000"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

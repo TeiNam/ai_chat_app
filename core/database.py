@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 import asyncmy
 from asyncmy.cursors import DictCursor
 from asyncmy.pool import Pool
-from fastapi import Depends, Request
+from fastapi import Request
 
 from core.config import settings
 

@@ -1,5 +1,5 @@
 import logging
-from typing import Annotated, Optional
+from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -47,7 +47,8 @@ async def get_current_user(
         if user_id is None or email is None:
             raise credentials_exception
 
-        token_data = TokenData(user_id=user_id, email=email)
+        pwd_change_required = payload.get("pwd_change_required", False)
+        token_data = TokenData(user_id=user_id, email=email, pwd_change_required=pwd_change_required)
     except (JWTError, ValidationError) as e:
         logger.error(f"토큰 검증 실패: {e}")
         raise credentials_exception
@@ -87,3 +88,46 @@ async def get_current_admin_user(current_user=Depends(get_current_user)):
             detail="해당 작업에 대한 권한이 없습니다. 관리자만 가능합니다.",
         )
     return current_user
+
+
+async def get_current_admin_user(current_user=Depends(get_current_user)):
+    """현재 관리자 사용자를 가져옵니다."""
+    if not current_user["is_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="해당 작업에 대한 권한이 없습니다. 관리자만 가능합니다.",
+        )
+    return current_user
+
+
+async def check_password_age(
+        request: Request,
+        token: Optional[str] = Depends(oauth2_scheme),
+):
+    """비밀번호 변경이 필요한지 확인합니다."""
+    # 토큰이 헤더에 없으면 쿠키에서 확인
+    if not token:
+        cookie_token = request.cookies.get("access_token")
+        if cookie_token and cookie_token.startswith("Bearer "):
+            token = cookie_token.split(" ")[1]
+
+    if not token:
+        return {"password_change_required": False}
+
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        pwd_change_required = payload.get("pwd_change_required", False)
+
+        if pwd_change_required:
+            return {
+                "password_change_required": True,
+                "message": "비밀번호를 180일 이상 변경하지 않았습니다. 보안을 위해 비밀번호를 변경해주세요."
+            }
+
+        return {"password_change_required": False}
+
+    except (JWTError, ValidationError) as e:
+        logger.error(f"토큰 검증 실패: {e}")
+        return {"password_change_required": False}

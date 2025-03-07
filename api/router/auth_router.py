@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -48,10 +48,23 @@ async def login(
             detail="계정이 비활성화되어 있습니다",
         )
 
+    # 비밀번호 변경 필요 여부 확인 (180일 이상 지난 경우)
+    password_change_required = False
+    password_days_old = 0
+
+    if user_password and user_password["update_at"]:
+        password_age = datetime.now() - user_password["update_at"]
+        password_days_old = password_age.days
+        if password_days_old >= 180:  # 180일 이상 경과
+            password_change_required = True
+
     # JWT 토큰 생성
-    access_token = create_access_token(
-        data={"sub": str(user["user_id"]), "email": user["email"]}
-    )
+    token_data = {
+        "sub": str(user["user_id"]),
+        "email": user["email"],
+        "pwd_change_required": password_change_required
+    }
+    access_token = create_access_token(data=token_data)
 
     # 로그인 기록 저장
     await user_repo.create_login_history(user["user_id"])
@@ -66,7 +79,8 @@ async def login(
         secure=settings.COOKIE_SECURE,
     )
 
-    return {
+    # 응답 생성
+    response_data = {
         "access_token": access_token,
         "token_type": "bearer",
         "user": UserOut(
@@ -76,8 +90,14 @@ async def login(
             is_admin=user["is_admin"],
             is_group_owner=user["is_group_owner"],
             profile_url=user["profile_url"]
-        )
+        ),
+        "password_age": {
+            "days": password_days_old,
+            "change_required": password_change_required
+        }
     }
+
+    return response_data
 
 
 @router.post("/auth/logout")

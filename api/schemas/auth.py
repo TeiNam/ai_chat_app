@@ -1,7 +1,6 @@
-from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserBase(BaseModel):
@@ -21,12 +20,19 @@ class UserOut(BaseModel):
     profile_url: Optional[str] = None
 
 
+class PasswordAgeInfo(BaseModel):
+    days: int
+    change_required: bool
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
     user: UserOut
+    password_age: PasswordAgeInfo
 
 
 class TokenData(BaseModel):
     user_id: Optional[int] = None
     email: Optional[EmailStr] = None
+    pwd_change_required: Optional[bool] = False
