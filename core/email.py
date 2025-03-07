@@ -19,6 +19,28 @@ class EmailManager:
         self.password = settings.SMTP_PASSWORD
         self.from_email = settings.SMTP_FROM_EMAIL
         self.use_tls = settings.SMTP_USE_TLS
+        self.is_available = False
+
+    async def check_connection(self):
+        """이메일 서버 연결을 확인합니다."""
+        try:
+            if self.use_tls:
+                server = smtplib.SMTP(self.host, self.port, timeout=5)
+                server.starttls()
+            else:
+                server = smtplib.SMTP_SSL(self.host, self.port, timeout=5)
+
+            server.login(self.username, self.password)
+            server.quit()
+
+            self.is_available = True
+            logger.info(f"이메일 서버 연결 성공: {self.host}:{self.port}")
+            return True
+
+        except Exception as e:
+            self.is_available = False
+            logger.error(f"이메일 서버 연결 실패: {e}")
+            return False
 
     async def send_email(
             self,
@@ -41,6 +63,11 @@ class EmailManager:
         Returns:
             bool: 이메일 전송 성공 여부
         """
+        # 이메일 서버가 사용 불가능하면 로그만 남기고 반환
+        if not self.is_available:
+            logger.warning(f"이메일 서버 연결이 비활성화되어 이메일을 전송할 수 없습니다: {to_email}")
+            return False
+
         try:
             msg = MIMEMultipart()
             msg["From"] = self.from_email
@@ -56,14 +83,14 @@ class EmailManager:
 
             # SMTP 서버 연결 및 이메일 전송
             if self.use_tls:
-                server = smtplib.SMTP(self.host, self.port)
+                server = smtplib.SMTP(self.host, self.port, timeout=10)
                 server.starttls()
             else:
-                server = smtplib.SMTP_SSL(self.host, self.port)
+                server = smtplib.SMTP_SSL(self.host, self.port, timeout=10)
 
             server.login(self.username, self.password)
 
-            all_recipients = to_email
+            all_recipients = to_email.copy()  # 리스트 복사
             if cc:
                 all_recipients.extend(cc)
             if bcc:

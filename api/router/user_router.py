@@ -68,8 +68,13 @@ async def register_user(user_data: UserCreate, db=Depends(get_db)):
 
     if not email_sent:
         logger.warning(f"인증 이메일 발송 실패: {user_data.email}")
+        return {
+            "message": "회원가입이 완료되었지만 이메일 서버 문제로 인증 이메일을 발송하지 못했습니다.",
+            "email_status": "failed",
+            "note": "관리자에게 문의하여 계정 활성화를 요청하세요."
+        }
 
-    return {"message": "회원가입이 완료되었습니다. 이메일 인증을 진행해주세요."}
+    return {"message": "회원가입이 완료되었습니다. 이메일 인증을 진행해주세요.", "email_status": "sent"}
 
 
 @router.post("/users/verify-email", response_model=Dict[str, str])

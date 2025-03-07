@@ -22,6 +22,13 @@ async def login(
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
         db=Depends(get_db)
 ):
+    # DB 연결 확인
+    if db is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="데이터베이스 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해주세요.",
+        )
+
     user_repo = UserRepository(db)
     user = await user_repo.get_user_by_email(form_data.username)
 

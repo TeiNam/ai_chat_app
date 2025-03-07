@@ -10,32 +10,53 @@ logger = logging.getLogger(__name__)
 
 
 class UserRepository:
-    def __init__(self, db: DictCursor):
+    def __init__(self, db: Optional[DictCursor]):
         self.db = db
+
+    def _check_db_connection(self) -> bool:
+        """DB 연결이 존재하는지 확인하고 없으면 로그를 남깁니다."""
+        if self.db is None:
+            logger.error("데이터베이스 연결이 없어 작업을 수행할 수 없습니다.")
+            return False
+        return True
 
     async def get_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
         """사용자 ID로 사용자 정보를 조회합니다."""
-        query = """
-        SELECT user_id, email, is_active, is_admin, is_group_owner, username, 
-               description, profile_url, create_at, update_at
-        FROM user
-        WHERE user_id = %s
-        """
-        await self.db.execute(query, (user_id,))
-        result = await self.db.fetchone()
-        return result
+        if not self._check_db_connection():
+            return None
+
+        try:
+            query = """
+            SELECT user_id, email, is_active, is_admin, is_group_owner, username, 
+                description, profile_url, create_at, update_at
+            FROM user
+            WHERE user_id = %s
+            """
+            await self.db.execute(query, (user_id,))
+            result = await self.db.fetchone()
+            return result
+        except Exception as e:
+            logger.error(f"사용자 조회 중 오류 발생: {e}")
+            return None
 
     async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """이메일로 사용자 정보를 조회합니다."""
-        query = """
-        SELECT user_id, email, is_active, is_admin, is_group_owner, username, 
-               description, profile_url, create_at, update_at
-        FROM user
-        WHERE email = %s
-        """
-        await self.db.execute(query, (email,))
-        result = await self.db.fetchone()
-        return result
+        if not self._check_db_connection():
+            return None
+
+        try:
+            query = """
+            SELECT user_id, email, is_active, is_admin, is_group_owner, username, 
+                description, profile_url, create_at, update_at
+            FROM user
+            WHERE email = %s
+            """
+            await self.db.execute(query, (email,))
+            result = await self.db.fetchone()
+            return result
+        except Exception as e:
+            logger.error(f"이메일로 사용자 조회 중 오류 발생: {e}")
+            return None
 
     async def get_user_password(self, user_id: int) -> Optional[Dict[str, Any]]:
         """사용자 ID로 비밀번호 정보를 조회합니다."""
