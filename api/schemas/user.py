@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 class UserBase(BaseModel):
@@ -10,14 +10,23 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=6, max_length=20)
     confirm_password: str
 
-    @validator('confirm_password')
-    def passwords_match(cls, v, values):
-        if 'password' in values and v != values['password']:
-            raise ValueError('비밀번호가 일치하지 않습니다')
+    @field_validator('password')
+    @classmethod
+    def password_requirements(cls, v: str) -> str:
+        from core.utils import validate_password
+        is_valid, error_message = validate_password(v)
+        if not is_valid:
+            raise ValueError(error_message)
         return v
+
+    @model_validator(mode='after')
+    def passwords_match(self) -> 'UserCreate':
+        if self.password != self.confirm_password:
+            raise ValueError('비밀번호가 일치하지 않습니다')
+        return self
 
 
 class UserUpdate(BaseModel):
@@ -28,14 +37,23 @@ class UserUpdate(BaseModel):
 
 class UserPasswordUpdate(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6, max_length=20)
     confirm_password: str
 
-    @validator('confirm_password')
-    def passwords_match(cls, v, values):
-        if 'new_password' in values and v != values['new_password']:
-            raise ValueError('새 비밀번호가 일치하지 않습니다')
+    @field_validator('new_password')
+    @classmethod
+    def password_requirements(cls, v: str) -> str:
+        from core.utils import validate_password
+        is_valid, error_message = validate_password(v)
+        if not is_valid:
+            raise ValueError(error_message)
         return v
+
+    @model_validator(mode='after')
+    def passwords_match(self) -> 'UserPasswordUpdate':
+        if self.new_password != self.confirm_password:
+            raise ValueError('새 비밀번호가 일치하지 않습니다')
+        return self
 
 
 class UserResponse(UserBase):
@@ -59,11 +77,25 @@ class RequestPasswordResetRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6, max_length=20)
     confirm_password: str
 
-    @validator('confirm_password')
-    def passwords_match(cls, v, values):
-        if 'new_password' in values and v != values['new_password']:
-            raise ValueError('새 비밀번호가 일치하지 않습니다')
+    @field_validator('new_password')
+    @classmethod
+    def password_requirements(cls, v: str) -> str:
+        from core.utils import validate_password
+        is_valid, error_message = validate_password(v)
+        if not is_valid:
+            raise ValueError(error_message)
         return v
+
+    @model_validator(mode='after')
+    def passwords_match(self) -> 'ResetPasswordRequest':
+        if self.new_password != self.confirm_password:
+            raise ValueError('새 비밀번호가 일치하지 않습니다')
+        return self
+
+
+class PasswordAgeInfo(BaseModel):
+    days: int
+    change_required: bool

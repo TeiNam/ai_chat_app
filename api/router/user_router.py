@@ -185,15 +185,16 @@ async def update_password(
         )
 
     # 비밀번호 업데이트
-    success = await user_repo.update_password(
+    success, error_message = await user_repo.update_password(
         user_id=current_user["user_id"],
-        new_password=password_data.new_password
+        new_password=password_data.new_password,
+        current_password=password_data.current_password
     )
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="비밀번호 업데이트 중 오류가 발생했습니다."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_message or "비밀번호 업데이트 중 오류가 발생했습니다."
         )
 
     return {"message": "비밀번호가 성공적으로 변경되었습니다."}
@@ -321,15 +322,15 @@ async def reset_password(
         )
 
     # 비밀번호 업데이트
-    success = await user_repo.update_password(
+    success, error_message = await user_repo.update_password(
         user_id=user_id,
         new_password=reset_data.new_password
     )
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="비밀번호 업데이트 중 오류가 발생했습니다."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_message or "비밀번호 업데이트 중 오류가 발생했습니다."
         )
 
     return {"message": "비밀번호가 성공적으로 재설정되었습니다. 이제 로그인할 수 있습니다."}

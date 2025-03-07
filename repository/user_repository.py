@@ -4,7 +4,7 @@ from typing import Dict, Optional, Any
 
 from asyncmy.cursors import DictCursor
 
-from core.security import get_password_hash
+from core.security import get_password_hash, verify_password
 
 logger = logging.getLogger(__name__)
 
@@ -178,22 +178,44 @@ class UserRepository:
             logger.error(f"사용자 삭제 실패: {e}")
             return False
 
-    async def update_password(self, user_id: int, new_password: str) -> bool:
-        """사용자 비밀번호를 업데이트합니다."""
+    async def update_password(self, user_id: int, new_password: str, current_password: Optional[str] = None) -> Tuple[
+        bool, Optional[str]]:
+        """
+        사용자 비밀번호를 업데이트합니다.
+
+        Args:
+            user_id: 사용자 ID
+            new_password: 새 비밀번호
+            current_password: 현재 비밀번호 (패스워드 재설정 시에는 None)
+
+        Returns:
+            Tuple[bool, Optional[str]]: (성공 여부, 오류 메시지)
+        """
+        if not self._check_db_connection():
+            return False, "데이터베이스 연결이 없습니다."
+
         try:
             # 현재 비밀번호 조회
             current_password_query = """
-            SELECT password FROM user_password
+            SELECT password, previous_password FROM user_password
             WHERE user_id = %s
             """
             await self.db.execute(current_password_query, (user_id,))
             result = await self.db.fetchone()
 
             if not result:
-                return False
+                return False, "사용자 비밀번호 정보를 찾을 수 없습니다."
 
             # 새 비밀번호 해시
-            hashed_password = get_password_hash(new_password)
+            hashed_new_password = get_password_hash(new_password)
+
+            # 새 비밀번호가 현재 비밀번호와 같은지 확인
+            if verify_password(new_password, result["password"]):
+                return False, "새 비밀번호는 현재 비밀번호와 달라야 합니다."
+
+            # 새 비밀번호가 이전 비밀번호와 같은지 확인 (previous_password가 있는 경우)
+            if result["previous_password"] and verify_password(new_password, result["previous_password"]):
+                return False, "새 비밀번호는 최근에 사용한 비밀번호와 달라야 합니다."
 
             # 비밀번호 업데이트 (현재 비밀번호를 previous_password로 이동)
             update_query = """
@@ -203,13 +225,13 @@ class UserRepository:
             """
             current_time = datetime.now()
             await self.db.execute(
-                update_query, (hashed_password, result["password"], current_time, user_id)
+                update_query, (hashed_new_password, result["password"], current_time, user_id)
             )
-            return True
+            return True, None
 
         except Exception as e:
             logger.error(f"비밀번호 업데이트 실패: {e}")
-            return False
+            return False, "비밀번호 업데이트 중 오류가 발생했습니다."
 
     async def activate_user(self, user_id: int) -> bool:
         """사용자 계정을 활성화합니다."""
