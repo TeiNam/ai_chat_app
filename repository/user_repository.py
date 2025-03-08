@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Tuple
 
 from asyncmy.cursors import DictCursor
 
