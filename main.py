@@ -40,6 +40,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("DB 연결 없이 애플리케이션 실행 중")
 
+    # Redis 초기화
+    from core.redis import redis_manager
+    is_redis_connected = await redis_manager.initialize()
+    if is_redis_connected:
+        logger.info("Redis 연결 상태 확인 완료")
+    else:
+        logger.warning("Redis 연결 실패, Redis 관련 기능이 제한됩니다")
+
     # 이메일 서버 연결 상태 체크 (비동기 함수를 클래스 메서드로 실행)
     email_check_result = await email_manager.check_connection()
     if email_check_result:
@@ -54,6 +62,10 @@ async def lifespan(app: FastAPI):
 
     # 애플리케이션 종료 시작
     logger.info("애플리케이션 종료 중...")
+
+    # Redis 연결 종료
+    await redis_manager.close()
+    logger.info("Redis 연결 종료 완료")
 
     # DB 커넥션 풀 정리
     if hasattr(app.state, "db_pool") and app.state.db_pool:

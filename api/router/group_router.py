@@ -390,7 +390,6 @@ async def invite_to_group(
 ):
     """이메일로 그룹 초대를 보냅니다."""
     group_repo = GroupRepository(db)
-    user_repo = UserRepository(db)
 
     # 그룹 정보 조회
     group = await group_repo.get_group_by_id(group_id)
@@ -409,6 +408,7 @@ async def invite_to_group(
         )
 
     # 초대할 이메일 주소로 사용자가 이미 존재하는지 확인
+    user_repo = UserRepository(db)
     existing_user = await user_repo.get_user_by_email(invite_data.email)
 
     # 이미 초대된 멤버인지 확인
@@ -429,47 +429,58 @@ async def invite_to_group(
     invitation_token = secrets.token_urlsafe(32)
     expires_at = datetime.now() + timedelta(days=7)
 
-    # 초대 정보 저장
-    success, error = await group_repo.store_invitation(
-        group_id=group_id,
-        email=invite_data.email,
-        invited_by=current_user["user_id"],
-        token=invitation_token,
-        expires_at=expires_at
-    )
+    try:
+        # 초대 정보 저장
+        success, error = await group_repo.store_invitation(
+            group_id=group_id,
+            email=invite_data.email,
+            invited_by=current_user["user_id"],
+            token=invitation_token,
+            expires_at=expires_at
+        )
 
-    if not success:
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error or "초대 정보 저장에 실패했습니다."
+            )
+
+        # 초대 이메일 전송 시도
+        try:
+            email_sent = await email_manager.send_invitation_email(
+                email=invite_data.email,
+                inviter_name=current_user["username"],
+                group_name=group["name"],
+                invitation_token=invitation_token
+            )
+        except Exception as e:
+            logger.error(f"이메일 발송 실패: {e}")
+            email_sent = False
+
+        if not email_sent:
+            logger.warning(f"그룹 초대 이메일 발송 실패: {invite_data.email}")
+
+        # 이미 가입된 사용자면 초대 수락 링크 생성
+        if existing_user:
+            # 멤버로 바로 추가 (대기 상태로)
+            member_id, _ = await group_repo.add_group_member(
+                group_id=group_id,
+                user_id=existing_user["user_id"],
+                is_accpet=False,
+                note=invite_data.note
+            )
+
+        return {
+            "message": "그룹 초대가 성공적으로 전송되었습니다.",
+            "invitation_sent": email_sent,
+            "email": invite_data.email
+        }
+    except Exception as e:
+        logger.error(f"초대 과정 실패: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=error or "초대 정보 저장에 실패했습니다."
+            detail=f"초대 과정에서 오류가 발생했습니다: {str(e)}"
         )
-
-    # 초대 이메일 발송
-    email_sent = await email_manager.send_invitation_email(
-        email=invite_data.email,
-        inviter_name=current_user["username"],
-        group_name=group["name"],
-        invitation_token=invitation_token
-    )
-
-    if not email_sent:
-        logger.warning(f"그룹 초대 이메일 발송 실패: {invite_data.email}")
-
-    # 이미 가입된 사용자면 초대 수락 링크 생성
-    if existing_user:
-        # 멤버로 바로 추가 (대기 상태로)
-        member_id, _ = await group_repo.add_group_member(
-            group_id=group_id,
-            user_id=existing_user["user_id"],
-            is_accpet=False,
-            note=invite_data.note
-        )
-
-    return {
-        "message": "그룹 초대가 성공적으로 전송되었습니다.",
-        "invitation_sent": email_sent,
-        "email": invite_data.email
-    }
 
 
 @router.post("/groups/accept-invitation", response_model=Dict[str, str])

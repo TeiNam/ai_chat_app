@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # 프론트엔드 URL (이메일 인증 링크 등에 사용)
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Redis 설정
+    REDIS_URL: str = "redis://localhost:6379/1"
+    REDIS_INVITATION_EXPIRE: int = 60 * 60 * 24 * 7  # 초대 토큰 만료 시간 (7일)
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
