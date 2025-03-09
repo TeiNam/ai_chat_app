@@ -11,7 +11,7 @@ Content-Type: application/x-www-form-urlencoded
 username={{email}}&password={{password}}
 
 ### 토큰 변수 저장
-@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJtZWRpYUByYXN0YWxpb24ubWUiLCJwd2RfY2hhbmdlX3JlcXVpcmVkIjpmYWxzZSwiZXhwIjoxNzQxNTcwODUxfQ.I6YdrLhoUtVY0JDuuuBGendA7PGgS7sEUBSxRcPmhm0
+@authToken = {{login.response.body.$.access_token}}
 
 ### API 키 생성
 # @name createApiKey
@@ -21,7 +21,7 @@ Content-Type: application/json
 
 {
   "vendor": "openai",
-  "api_key": "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",
+  "api_key": "sk-your-openai-api-key",
   "is_active": true
 }
 
