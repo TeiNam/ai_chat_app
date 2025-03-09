@@ -1,6 +1,4 @@
 import logging
-import secrets
-from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status, Path, Query
@@ -8,11 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Path, Query
 from api.deps.auth import get_current_user
 from api.schemas.group import (
     GroupCreate, GroupUpdate, GroupResponse, GroupDetailResponse,
-    GroupMemberCreate, GroupMemberUpdate, GroupMemberResponse,
-    GroupInviteRequest, GroupInviteResponse, GroupInviteAcceptRequest
+    GroupMemberCreate, GroupMemberUpdate, GroupMemberResponse
 )
 from core.database import get_db
-from core.email import email_manager
 from repository.group_repository import GroupRepository
 from repository.user_repository import UserRepository
 
@@ -381,189 +377,6 @@ async def remove_group_member(
     return {"message": "멤버가 성공적으로 제거되었습니다."}
 
 
-@router.post("/groups/{group_id}/invite", response_model=GroupInviteResponse)
-async def invite_to_group(
-        invite_data: GroupInviteRequest,
-        group_id: int = Path(..., gt=0),
-        current_user: Dict[str, Any] = Depends(get_current_user),
-        db=Depends(get_db)
-):
-    """이메일로 그룹 초대를 보냅니다."""
-    group_repo = GroupRepository(db)
-
-    # 그룹 정보 조회
-    group = await group_repo.get_group_by_id(group_id)
-
-    if not group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="그룹을 찾을 수 없습니다."
-        )
-
-    # 그룹 소유자인지 확인
-    if group["owner_user_id"] != current_user["user_id"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="그룹에 초대할 권한이 없습니다."
-        )
-
-    # 초대할 이메일 주소로 사용자가 이미 존재하는지 확인
-    user_repo = UserRepository(db)
-    existing_user = await user_repo.get_user_by_email(invite_data.email)
-
-    # 이미 초대된 멤버인지 확인
-    if existing_user:
-        existing_member = await group_repo.get_member_by_user_and_group(
-            user_id=existing_user["user_id"],
-            group_id=group_id
-        )
-
-        if existing_member:
-            if existing_member["is_accpet"] and existing_member["is_active"]:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="해당 사용자는 이미 그룹의 활성 멤버입니다."
-                )
-
-    # 초대 토큰 생성
-    invitation_token = secrets.token_urlsafe(32)
-    expires_at = datetime.now() + timedelta(days=7)
-
-    try:
-        # 초대 정보 저장
-        success, error = await group_repo.store_invitation(
-            group_id=group_id,
-            email=invite_data.email,
-            invited_by=current_user["user_id"],
-            token=invitation_token,
-            expires_at=expires_at
-        )
-
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=error or "초대 정보 저장에 실패했습니다."
-            )
-
-        # 초대 이메일 전송 시도
-        try:
-            email_sent = await email_manager.send_invitation_email(
-                email=invite_data.email,
-                inviter_name=current_user["username"],
-                group_name=group["name"],
-                invitation_token=invitation_token
-            )
-        except Exception as e:
-            logger.error(f"이메일 발송 실패: {e}")
-            email_sent = False
-
-        if not email_sent:
-            logger.warning(f"그룹 초대 이메일 발송 실패: {invite_data.email}")
-
-        # 이미 가입된 사용자면 초대 수락 링크 생성
-        if existing_user:
-            # 멤버로 바로 추가 (대기 상태로)
-            member_id, _ = await group_repo.add_group_member(
-                group_id=group_id,
-                user_id=existing_user["user_id"],
-                is_accpet=False,
-                note=invite_data.note
-            )
-
-        return {
-            "message": "그룹 초대가 성공적으로 전송되었습니다.",
-            "invitation_sent": email_sent,
-            "email": invite_data.email
-        }
-    except Exception as e:
-        logger.error(f"초대 과정 실패: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"초대 과정에서 오류가 발생했습니다: {str(e)}"
-        )
-
-
-@router.post("/groups/accept-invitation", response_model=Dict[str, str])
-async def accept_group_invitation(
-        invite_data: GroupInviteAcceptRequest,
-        current_user: Dict[str, Any] = Depends(get_current_user),
-        db=Depends(get_db)
-):
-    """그룹 초대를 수락합니다."""
-    group_repo = GroupRepository(db)
-
-    # 초대 토큰 검증
-    invitation_info, error = await group_repo.verify_invitation(invite_data.invitation_token)
-
-    if not invitation_info:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error or "유효하지 않은 초대입니다."
-        )
-
-    # 초대된 이메일과 현재 사용자 이메일 비교
-    if invitation_info.get("email") != current_user["email"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="이 초대는 다른 이메일 주소로 발송되었습니다."
-        )
-
-    group_id = invitation_info.get("group_id")
-
-    # 그룹 정보 조회
-    group = await group_repo.get_group_by_id(group_id)
-
-    if not group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="초대된 그룹을 찾을 수 없습니다."
-        )
-
-    # 멤버로 추가 또는 업데이트
-    existing_member = await group_repo.get_member_by_user_and_group(
-        user_id=current_user["user_id"],
-        group_id=group_id
-    )
-
-    if existing_member:
-        # 기존 멤버 상태 업데이트
-        success, error = await group_repo.update_group_member(
-            member_id=existing_member["member_id"],
-            is_accpet=True,
-            is_active=True
-        )
-    else:
-        # 새 멤버로 추가
-        member_id, error = await group_repo.add_group_member(
-            group_id=group_id,
-            user_id=current_user["user_id"],
-            is_accpet=True
-        )
-        success = member_id is not None
-
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error or "그룹 참가에 실패했습니다."
-        )
-
-    return {"message": f"{group['name']} 그룹에 성공적으로 참가했습니다."}
-
-
-@router.get("/user/api-keys", response_model=List[Dict[str, Any]])
-async def get_user_api_keys(
-        current_user: Dict[str, Any] = Depends(get_current_user),
-        db=Depends(get_db)
-):
-    """사용자가 소유한 API 키 목록을 조회합니다."""
-    group_repo = GroupRepository(db)
-
-    # API 키 목록 조회
-    api_keys = await group_repo.get_user_owned_api_keys(current_user["user_id"])
-
-    return api_keys
-
-
 @router.get("/groups/{group_id}/pending-members", response_model=List[GroupMemberResponse])
 async def get_pending_members(
         group_id: int = Path(..., gt=0),
@@ -651,3 +464,17 @@ async def approve_group_member(
     updated_member = await group_repo.get_member_info(member_id)
 
     return updated_member
+
+
+@router.get("/user/api-keys", response_model=List[Dict[str, Any]])
+async def get_user_api_keys(
+        current_user: Dict[str, Any] = Depends(get_current_user),
+        db=Depends(get_db)
+):
+    """사용자가 소유한 API 키 목록을 조회합니다."""
+    group_repo = GroupRepository(db)
+
+    # API 키 목록 조회
+    api_keys = await group_repo.get_user_owned_api_keys(current_user["user_id"])
+
+    return api_keys

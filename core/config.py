@@ -47,8 +47,19 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
 
     # Redis 설정
-    REDIS_URL: str = "redis://localhost:6379/1"
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 1
+    REDIS_PASSWORD: str = ""
+    REDIS_SSL: bool = False
     REDIS_INVITATION_EXPIRE: int = 60 * 60 * 24 * 7  # 초대 토큰 만료 시간 (7일)
+
+    @property
+    def REDIS_URL(self) -> str:
+        """Redis 연결 URL 생성"""
+        auth_part = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+        protocol = "rediss" if self.REDIS_SSL else "redis"
+        return f"{protocol}://{auth_part}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

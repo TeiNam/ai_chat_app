@@ -1,9 +1,9 @@
 import logging
 import secrets
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import EmailStr
 
 from api.deps.auth import get_current_user
@@ -369,3 +369,25 @@ async def invite_user(
     )
 
     return {"message": f"{email}에게 초대 이메일이 발송되었습니다."}
+
+
+@router.get("/users/search", response_model=List[Dict[str, Any]])
+async def search_users(
+        q: str = Query(..., min_length=2, description="검색어 (이메일 또는 사용자명)"),
+        limit: int = Query(10, ge=1, le=50, description="결과 최대 개수"),
+        current_user: Dict[str, Any] = Depends(get_current_user),
+        db=Depends(get_db)
+):
+    """이메일이나 사용자명으로 사용자를 검색합니다."""
+    user_repo = UserRepository(db)
+
+    # 사용자 검색
+    users = await user_repo.search_users(
+        search_term=q,
+        limit=limit
+    )
+
+    # 자기 자신은 결과에서 제외
+    users = [user for user in users if user["user_id"] != current_user["user_id"]]
+
+    return users

@@ -58,15 +58,18 @@ class GroupDetailResponse(GroupResponse):
     members: List[GroupMemberResponse] = []
 
 
-class GroupInviteRequest(BaseModel):
-    email: EmailStr
+class GroupUserInviteRequest(BaseModel):
+    """사용자 ID를 통한 그룹 초대 요청"""
+    user_id: int = Field(..., gt=0)
     note: Optional[str] = Field(None, max_length=100)
 
 
-class GroupInviteResponse(BaseModel):
+class GroupUserInviteResponse(BaseModel):
+    """사용자 ID를 통한 그룹 초대 응답"""
+    success: bool
     message: str
-    invitation_sent: bool
-    email: EmailStr
+    invitation_id: Optional[int] = None
+    user_info: Optional[Dict[str, Any]] = None
 
 
 class GroupInviteAcceptRequest(BaseModel):

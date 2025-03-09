@@ -510,6 +510,40 @@ class GroupRepository:
             logger.error(f"사용자-그룹 멤버 정보 조회 실패: {e}")
             return None
 
+    async def search_users(self, search_term: str, limit: int = 10) -> list:
+        """
+        이메일이나 사용자명으로 사용자를 검색합니다.
+
+        Args:
+            search_term: 검색어 (이메일 또는 사용자명)
+            limit: 결과 최대 개수
+
+        Returns:
+            List[Dict[str, Any]]: 검색된 사용자 목록
+        """
+        if not self._check_db_connection():
+            return []
+
+        try:
+            # 이메일이나 사용자명에 검색어가 포함된 사용자 검색
+            query = """
+            SELECT user_id, email, username, profile_url
+            FROM user
+            WHERE (email LIKE %s OR username LIKE %s) AND is_active = 1
+            ORDER BY username
+            LIMIT %s
+            """
+
+            search_pattern = f"%{search_term}%"
+            await self.db.execute(query, (search_pattern, search_pattern, limit))
+            results = await self.db.fetchall()
+
+            return results
+
+        except Exception as e:
+            logger.error(f"사용자 검색 실패: {e}")
+            return []
+
     async def store_invitation(
             self, group_id: int, email: str, invited_by: int,
             token: str, expires_at: datetime
@@ -519,30 +553,19 @@ class GroupRepository:
             return False, "데이터베이스 연결이 없습니다."
 
         try:
-            # 이미 존재하는 초대 삭제 (token_type으로만 필터링하여 단순화)
-            delete_query = """
-            DELETE FROM verification_token 
-            WHERE token_type = 'group_invitation'
-            AND (
-                token LIKE %s
-                OR token LIKE %s
+            # Redis 초대 저장 서비스 사용
+            from service.invitation_service import invitation_service
+            success, error = await invitation_service.store_invitation(
+                group_id=group_id,
+                email=email,
+                invited_by=invited_by,
+                token=token,
+                expires_at=expires_at
             )
-            """
-            email_pattern = f"%{email}%"
-            group_pattern = f"%{group_id}%"
-            await self.db.execute(delete_query, (email_pattern, group_pattern))
 
-            # JSON 및 Base64 사용하지 않고 간소화
-            # 단순한 토큰 ID만 저장
-            insert_query = """
-            INSERT INTO verification_token (token, token_type, expires_at)
-            VALUES (%s, %s, %s)
-            """
-            # 토큰 ID만 저장하고 초대 정보는 별도 테이블에 저장하거나 추후 필요할 때 처리
-            await self.db.execute(insert_query, (token, 'group_invitation', expires_at))
-
-            # 로그 추가
-            logger.info(f"초대 토큰 저장 성공: token={token[:10]}..., expires_at={expires_at}")
+            if not success:
+                logger.error(f"Redis에 초대 정보 저장 실패: {error}")
+                return False, error
 
             return True, None
 
@@ -555,41 +578,15 @@ class GroupRepository:
 
     async def verify_invitation(self, token: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """초대 토큰을 검증하고 그룹 및 이메일 정보를 반환합니다."""
-        if not self._check_db_connection():
-            return None, "데이터베이스 연결이 없습니다."
-
         try:
-            query = """
-            SELECT token, token_type, expires_at 
-            FROM verification_token
-            WHERE token = %s AND token_type = 'group_invitation'
-            """
-            await self.db.execute(query, (token,))
-            result = await self.db.fetchone()
+            # Redis 초대 검증 서비스 사용
+            from service.invitation_service import invitation_service
+            invitation_data, error = await invitation_service.verify_invitation(token)
 
-            if not result:
-                return None, "유효하지 않은 초대 토큰입니다."
+            if not invitation_data:
+                return None, error
 
-            # 토큰 만료 확인
-            if result["expires_at"] < datetime.now():
-                # 만료된 토큰 삭제
-                delete_query = """
-                DELETE FROM verification_token 
-                WHERE token = %s
-                """
-                await self.db.execute(delete_query, (token,))
-                return None, "초대 토큰이 만료되었습니다."
-
-            # 초대 정보는 현재 token에 저장되어 있지 않기 때문에
-            # 이 간소화된 버전에서는 더미 데이터 반환
-            # 실제 구현에서는 별도 테이블이나 인메모리 저장소에서 정보 가져오기
-            dummy_info = {
-                "group_id": 1,  # 실제로는 이 값을 어딘가에서 가져와야 함
-                "email": "example@example.com",  # 실제로는 이 값을 어딘가에서 가져와야 함
-                "invited_by": 1  # 실제로는 이 값을 어딘가에서 가져와야 함
-            }
-
-            return dummy_info, None
+            return invitation_data, None
 
         except Exception as e:
             logger.error(f"초대 토큰 검증 실패: {e}")
