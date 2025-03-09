@@ -1,3 +1,4 @@
+# api/router/group_router.py
 import logging
 from typing import Dict, List, Any
 
@@ -375,95 +376,6 @@ async def remove_group_member(
         )
 
     return {"message": "멤버가 성공적으로 제거되었습니다."}
-
-
-@router.get("/groups/{group_id}/pending-members", response_model=List[GroupMemberResponse])
-async def get_pending_members(
-        group_id: int = Path(..., gt=0),
-        current_user: Dict[str, Any] = Depends(get_current_user),
-        db=Depends(get_db)
-):
-    """그룹의 대기 중인(승인 대기) 멤버 목록을 조회합니다."""
-    group_repo = GroupRepository(db)
-
-    # 그룹 정보 조회
-    group = await group_repo.get_group_by_id(group_id)
-
-    if not group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="그룹을 찾을 수 없습니다."
-        )
-
-    # 그룹 소유자인지 확인
-    if group["owner_user_id"] != current_user["user_id"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="대기 중인 멤버 목록을 조회할 권한이 없습니다."
-        )
-
-    # 대기 중인 멤버 목록 조회 (is_accpet=0인 멤버)
-    pending_members = await group_repo.get_pending_members(group_id)
-
-    return pending_members
-
-
-@router.post("/groups/{group_id}/members/{member_id}/approve", response_model=GroupMemberResponse)
-async def approve_group_member(
-        group_id: int = Path(..., gt=0),
-        member_id: int = Path(..., gt=0),
-        current_user: Dict[str, Any] = Depends(get_current_user),
-        db=Depends(get_db)
-):
-    """그룹 관리자가 대기 중인 멤버를 승인합니다."""
-    group_repo = GroupRepository(db)
-
-    # 그룹 정보 조회
-    group = await group_repo.get_group_by_id(group_id)
-
-    if not group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="그룹을 찾을 수 없습니다."
-        )
-
-    # 그룹 소유자인지 확인
-    if group["owner_user_id"] != current_user["user_id"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="멤버를 승인할 권한이 없습니다."
-        )
-
-    # 멤버 정보 조회 및 그룹 확인
-    member = await group_repo.get_member_info(member_id)
-
-    if not member or member["group_id"] != group_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="해당 그룹에서 멤버를 찾을 수 없습니다."
-        )
-
-    # 이미 승인된 멤버인지 확인
-    if member["is_accpet"]:
-        return member
-
-    # 멤버 승인 (is_accpet=1로 설정)
-    success, error = await group_repo.update_group_member(
-        member_id=member_id,
-        is_accpet=True,
-        is_active=True
-    )
-
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=error or "멤버 승인 중 오류가 발생했습니다."
-        )
-
-    # 업데이트된 멤버 정보 조회
-    updated_member = await group_repo.get_member_info(member_id)
-
-    return updated_member
 
 
 @router.get("/user/api-keys", response_model=List[Dict[str, Any]])
