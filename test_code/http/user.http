@@ -1,0 +1,100 @@
+### 환경 변수 설정
+@baseUrl = http://localhost:8000
+@email = media@rastalion.me
+@password = TestPassword1!
+@newPassword = NewPassword2@
+
+### 로그인하여 토큰 가져오기
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/x-www-form-urlencoded
+
+username={{email}}&password={{password}}
+
+### 로그인 응답에서 토큰 저장
+#@authToken = {{login.response.body.$.access_token}}
+# 또는 다음 방법 중 하나 사용
+# @authToken = {{login.response.body.access_token}}
+@authToken = {{login.response.body.access_token}}
+
+### 새 사용자 등록
+# @name register
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "email": "media@rastalion.me",
+  "username": "testuser1",
+  "password": "TestPassword1!",
+  "confirm_password": "TestPassword1!"
+}
+
+### 현재 로그인한 사용자 정보 조회
+GET {{baseUrl}}/api/users/me
+Authorization: Bearer {{authToken}}
+
+### 사용자 정보 업데이트
+PUT {{baseUrl}}/api/users/me
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "username": "updated_username",
+  "description": "Updated user profile description"
+}
+
+### 비밀번호 변경
+PUT {{baseUrl}}/api/users/me/password
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "current_password": "{{password}}",
+  "new_password": "{{newPassword}}",
+  "confirm_password": "{{newPassword}}"
+}
+
+### 비밀번호 상태 확인
+GET {{baseUrl}}/api/users/me/password-status
+Authorization: Bearer {{authToken}}
+
+### 이미 사용 중인 이메일로 사용자 등록 시도
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "username": "duplicateuser",
+  "password": "TestPassword1!",
+  "confirm_password": "TestPassword1!"
+}
+
+### 이메일 인증 토큰 검증 (실제 테스트에서는 이메일을 통해 받은 토큰으로 대체)
+POST {{baseUrl}}/api/users/verify-email
+Content-Type: application/json
+
+{
+  "token": "d5fia4jEBRvrzsqYoEu74kH-km7TJzHUxSsRKwPdWIo"
+}
+
+### 비밀번호 재설정 요청
+POST {{baseUrl}}/api/users/reset-password/request
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+### 비밀번호 재설정 (실제 테스트에서는 이메일을 통해 받은 토큰으로 대체)
+POST {{baseUrl}}/api/users/reset-password
+Content-Type: application/json
+
+{
+  "token": "sample_reset_token_here",
+  "new_password": "{{newPassword}}",
+  "confirm_password": "{{newPassword}}"
+}
+
+### 회원 탈퇴
+DELETE {{baseUrl}}/api/users/me
+Authorization: Bearer {{authToken}}

@@ -12,7 +12,7 @@ from core.database import get_db
 from core.security import create_access_token, get_password_hash, verify_password
 from repository.user_repository import UserRepository
 
-router = APIRouter()
+router = APIRouter(tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 

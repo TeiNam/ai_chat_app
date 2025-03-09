@@ -83,6 +83,9 @@ class UserRepository:
             self, email: str, username: str, password: str, is_active: bool = False
     ) -> Optional[int]:
         """새로운 사용자를 생성합니다."""
+        if not self._check_db_connection():
+            return None
+
         try:
             # 트랜잭션 시작
             await self.db.execute("START TRANSACTION")

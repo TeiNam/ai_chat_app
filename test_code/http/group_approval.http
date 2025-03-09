@@ -1,0 +1,30 @@
+### 환경 변수 설정
+@baseUrl = http://localhost:8000
+@email = test@example.com
+@password = TestPassword1!
+
+### 로그인하여 토큰 가져오기
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/x-www-form-urlencoded
+
+username={{email}}&password={{password}}
+
+### 토큰 변수 저장
+@authToken = {{login.response.body.$.access_token}}
+
+### 그룹 ID 설정 (실제 그룹 ID로 변경)
+@groupId = 1
+
+### 대기 중인 멤버 목록 조회
+GET {{baseUrl}}/api/groups/{{groupId}}/pending-members
+Authorization: Bearer {{authToken}}
+
+### 대기 중인 멤버 승인 (멤버 ID를 실제 값으로 변경)
+@memberId = 1
+POST {{baseUrl}}/api/groups/{{groupId}}/members/{{memberId}}/approve
+Authorization: Bearer {{authToken}}
+
+### 그룹의 모든 멤버 조회 (승인된 멤버 포함)
+GET {{baseUrl}}/api/groups/{{groupId}}
+Authorization: Bearer {{authToken}}

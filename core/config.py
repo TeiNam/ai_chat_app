@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # 쿠키 설정
     COOKIE_SECURE: bool = False  # 개발 환경에서는 False, 프로덕션에서는 True로 변경
 
+    # 암호화 설정
+    CRYPTO_SALT: str = "ai_chat_bot_salt"  # 프로덕션에서는 반드시 변경
+
     # 이메일 설정
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587

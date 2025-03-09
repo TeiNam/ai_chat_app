@@ -17,7 +17,7 @@ from core.email import email_manager
 from core.security import get_password_hash, verify_password
 from repository.user_repository import UserRepository
 
-router = APIRouter()
+router = APIRouter(tags=["users"])
 logger = logging.getLogger(__name__)
 
 

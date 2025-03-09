@@ -1,19 +1,24 @@
 import logging
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import asyncio
 from contextlib import asynccontextmanager
 
-from api.router import auth_router, user_router, health_router
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from api.middleware.password_check import PasswordChangeMiddleware
 from core.config import settings
 from core.database import get_connection_pool, check_db_connection
 from core.email import email_manager
+from core.router_loader import auto_register_routers
 
+# 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
+
+# 특정 로거의 레벨 변경
+logging.getLogger("passlib").setLevel(logging.ERROR)  # WARNING 대신 ERROR 레벨로 설정하여 WARNING 숨김
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,10 +82,13 @@ app.add_middleware(
 # 비밀번호 변경 체크 미들웨어 추가
 app.add_middleware(PasswordChangeMiddleware)
 
-# 라우터 등록
-app.include_router(auth_router.router, prefix="/api", tags=["auth"])
-app.include_router(user_router.router, prefix="/api", tags=["users"])
-app.include_router(health_router.router, prefix="/api", tags=["system"])
+# 라우터 자동 등록
+registered_routers = auto_register_routers(app)
+logger.info(f"총 {len(registered_routers)}개의 라우터가 자동 등록되었습니다.")
+
+# 라우터 정보 로깅
+for router in registered_routers:
+    logger.debug(f"등록된 라우터: {router['name']} (태그: {router['tags']}, 경로 수: {router['routes_count']})")
 
 if __name__ == "__main__":
     import uvicorn

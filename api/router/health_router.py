@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from core.database import check_db_connection
 from core.email import email_manager
 
-router = APIRouter()
+router = APIRouter(tags=["system"])
 logger = logging.getLogger(__name__)
 
 
